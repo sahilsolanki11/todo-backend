@@ -16,13 +16,31 @@ pipeline {
             }
         }
 
-        stage('Deploy Container') {
+        stage('Deploy to UAT') {
             steps {
                 script {
                     bat '''
-                    docker stop todo-backend || exit 0
-                    docker rm todo-backend || exit 0
-                    docker run -d -p 5000:5000 --name todo-backend todo-backend
+                    docker stop todo-backend-uat || exit 0
+                    docker rm todo-backend-uat || exit 0
+                    docker run -d -p 5001:5000 --name todo-backend-uat todo-backend:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Approval for Production') {
+            steps {
+                input "UAT testing done? Deploy backend to Production?"
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                script {
+                    bat '''
+                    docker stop todo-backend-prod || exit 0
+                    docker rm todo-backend-prod || exit 0
+                    docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:latest
                     '''
                 }
             }
