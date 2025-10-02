@@ -30,7 +30,7 @@ pipeline {
 
         stage('Approval for Production') {
             steps {
-                input "UAT testing done? Deploy backend to Production?"
+                input "✅ UAT testing done? Deploy backend to Production?"
             }
         }
 
@@ -38,7 +38,10 @@ pipeline {
             steps {
                 script {
                     bat """
-                    docker commit todo-backend-prod todo-backend:previous || exit 0
+                    docker ps -a --format '{{.Names}}' | findstr todo-backend-prod >nul && (
+                        docker commit todo-backend-prod todo-backend:previous
+                    ) || echo "No existing prod container, skipping commit"
+
                     docker stop todo-backend-prod || exit 0
                     docker rm todo-backend-prod || exit 0
                     docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:latest
