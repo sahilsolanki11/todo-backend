@@ -11,7 +11,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    bat 'docker build -t todo-backend .'
+                    bat 'docker build -t todo-backend:latest .'
                 }
             }
         }
@@ -30,13 +30,15 @@ pipeline {
 
         stage('Approval for Production') {
             steps {
-                input "UAT testing done? Deploy backend to Production?"
+                input "✅ UAT testing done? Deploy backend to Production?"
             }
         }
 
         stage('Deploy to Production') {
             steps {
                 script {
+                    // Save old production container as backup before new deploy
+                    bat "docker commit todo-backend-prod todo-backend:previous || exit 0"
                     bat '''
                     docker stop todo-backend-prod || exit 0
                     docker rm todo-backend-prod || exit 0
@@ -44,6 +46,22 @@ pipeline {
                     '''
                 }
             }
+        }
+    }
+
+    post {
+        failure {
+            echo '❌ Backend deployment failed! Rolling back...'
+            script {
+                bat '''
+                docker stop todo-backend-prod || exit 0
+                docker rm todo-backend-prod || exit 0
+                docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:previous || exit 0
+                '''
+            }
+        }
+        success {
+            echo '✅ Backend pipeline finished successfully!'
         }
     }
 }
