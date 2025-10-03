@@ -18,9 +18,10 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Building UAT backend image"
-                    // UAT env file
+                    // UAT env file (Atlas DB)
                     bat 'echo PORT=5000 > .env'
-                    bat 'echo MONGO_URI=mongodb://host.docker.internal:27017/tododb >> .env'
+                    bat 'echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority >> .env'
+                    bat 'echo JWT_SECRET=mysecret123 >> .env'
                     bat 'docker build -t todo-backend:uat .'
                 }
             }
@@ -49,9 +50,10 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Building Production backend image"
-                    // Production env file
+                    // Production env file (Atlas DB)
                     bat 'echo PORT=5000 > .env'
-                    bat 'echo MONGO_URI=mongodb://host.docker.internal:27017/tododb >> .env'
+                    bat 'echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority >> .env'
+                    bat 'echo JWT_SECRET=mysecret123 >> .env'
                     bat 'docker build -t todo-backend:prod .'
                 }
             }
