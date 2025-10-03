@@ -8,10 +8,19 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Install Dependencies') {
+            steps {
+                bat 'npm install'
+            }
+        }
+
+        stage('Build UAT Docker Image') {
             steps {
                 script {
-                    bat 'docker build -t todo-backend .'
+                    echo "⚙️ Building UAT backend image"
+                    bat 'echo PORT=5000 > .env'
+                    bat 'echo MONGO_URI=mongodb://host.docker.internal:27017/tododb >> .env'
+                    bat 'docker build -t todo-backend:uat .'
                 }
             }
         }
@@ -19,11 +28,12 @@ pipeline {
         stage('Deploy to UAT') {
             steps {
                 script {
-                    bat """
+                    echo "🚀 Deploying UAT backend container on port 5001"
+                    bat '''
                     docker stop todo-backend-uat || exit 0
                     docker rm todo-backend-uat || exit 0
-                    docker run -d -p 5001:5000 --name todo-backend-uat todo-backend:latest
-                    """
+                    docker run -d -p 5001:5000 --name todo-backend-uat todo-backend:uat
+                    '''
                 }
             }
         }
@@ -34,18 +44,26 @@ pipeline {
             }
         }
 
+        stage('Build Production Docker Image') {
+            steps {
+                script {
+                    echo "⚙️ Building Production backend image"
+                    bat 'echo PORT=5000 > .env'
+                    bat 'echo MONGO_URI=mongodb://host.docker.internal:27017/tododb >> .env'
+                    bat 'docker build -t todo-backend:prod .'
+                }
+            }
+        }
+
         stage('Deploy to Production') {
             steps {
                 script {
-                    bat """
-                    docker ps -a --format '{{.Names}}' | findstr todo-backend-prod >nul && (
-                        docker commit todo-backend-prod todo-backend:previous
-                    ) || echo "No existing prod container, skipping commit"
-
+                    echo "🚀 Deploying Production backend container on port 5000"
+                    bat '''
                     docker stop todo-backend-prod || exit 0
                     docker rm todo-backend-prod || exit 0
-                    docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:latest
-                    """
+                    docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:prod
+                    '''
                 }
             }
         }
@@ -56,7 +74,14 @@ pipeline {
             echo "✅ Backend pipeline finished successfully!"
         }
         failure {
-            echo "❌ Backend pipeline failed!"
+            echo "❌ Backend deployment failed! Rolling back..."
+            script {
+                bat '''
+                docker stop todo-backend-prod || exit 0
+                docker rm todo-backend-prod || exit 0
+                docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:previous || exit 0
+                '''
+            }
         }
     }
 }
