@@ -10,8 +10,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Use /api/auth to match frontend routes
-app.use("/api/auth", require("./routes/authRoutes"));
+// ✅ Import routes
+const userRoutes = require("./routes/userRoutes");
+
+// ✅ Mount routes
+app.use("/api/auth", userRoutes);
 
 // Root route
 app.get("/", (req, res) => {
