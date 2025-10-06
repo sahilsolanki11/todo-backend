@@ -18,9 +18,9 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Building UAT backend image"
-                    // ✅ Properly quoted Atlas URI
+                    // ✅ Safe MongoDB URI (Windows compatible)
                     bat 'echo PORT=5000 > .env'
-                    bat 'echo MONGO_URI="mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority" >> .env'
+                    bat 'echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env'
                     bat 'docker build -t todo-backend:uat .'
                 }
             }
@@ -49,9 +49,8 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Building Production backend image"
-                    // ✅ Properly quoted Atlas URI
                     bat 'echo PORT=5000 > .env'
-                    bat 'echo MONGO_URI="mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority" >> .env'
+                    bat 'echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env'
                     bat 'docker build -t todo-backend:prod .'
                 }
             }
