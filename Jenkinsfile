@@ -18,9 +18,12 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Building UAT backend image"
-                    // ✅ Safe MongoDB URI (Windows compatible)
-                    bat 'echo PORT=5000 > .env'
-                    bat 'echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env'
+                    // ✅ Safe env file for UAT (Windows escape fix)
+                    bat '''
+                    echo PORT=5000 > .env
+                    echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env
+                    echo JWT_SECRET=mysecret321 >> .env
+                    '''
                     bat 'docker build -t todo-backend:uat .'
                 }
             }
@@ -49,8 +52,11 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Building Production backend image"
-                    bat 'echo PORT=5000 > .env'
-                    bat 'echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env'
+                    bat '''
+                    echo PORT=5000 > .env
+                    echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env
+                    echo JWT_SECRET=mysecret321 >> .env
+                    '''
                     bat 'docker build -t todo-backend:prod .'
                 }
             }
