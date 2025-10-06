@@ -12,9 +12,11 @@ app.use(express.json());
 
 // ✅ Import routes
 const userRoutes = require("./routes/userRoutes");
+const todoRoutes = require("./routes/todoRoutes"); // <-- add this
 
 // ✅ Mount routes
 app.use("/api/auth", userRoutes);
+app.use("/api/todos", todoRoutes); // <-- add this
 
 // Root route
 app.get("/", (req, res) => {
