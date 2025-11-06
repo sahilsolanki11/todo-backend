@@ -1,30 +1,47 @@
 pipeline {
     agent any
 
+    environment {
+        REPO_URL = 'https://github.com/sahilsolanki11/todo-backend.git'
+        APP_NAME = 'todo-backend'
+        MONGO_URI = 'mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority'
+        JWT_SECRET = 'mysecret321'
+    }
+
     stages {
+
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/sahilsolanki11/todo-backend.git'
+                echo "📦 Checking out code from GitHub..."
+                git branch: 'dev', url: "${REPO_URL}"
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                bat 'npm install'
+                echo "📦 Installing backend dependencies..."
+                sh '''
+                if [ -f package.json ]; then
+                    npm install
+                else
+                    echo "❌ package.json not found!"
+                    exit 1
+                fi
+                '''
             }
         }
 
         stage('Build UAT Docker Image') {
             steps {
                 script {
-                    echo "⚙️ Building UAT backend image"
-                    // ✅ Safe env file for UAT (Windows escape fix)
-                    bat '''
-                    echo PORT=5000 > .env
-                    echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env
-                    echo JWT_SECRET=mysecret321 >> .env
+                    echo "⚙️ Building UAT Docker image for ${APP_NAME}"
+                    sh '''
+                    echo "PORT=5000" > .env
+                    echo "MONGO_URI=${MONGO_URI}" >> .env
+                    echo "JWT_SECRET=${JWT_SECRET}" >> .env
+
+                    docker build -t ${APP_NAME}:uat .
                     '''
-                    bat 'docker build -t todo-backend:uat .'
                 }
             }
         }
@@ -32,11 +49,11 @@ pipeline {
         stage('Deploy to UAT') {
             steps {
                 script {
-                    echo "🚀 Deploying backend UAT on port 5001"
-                    bat '''
-                    docker stop todo-backend-uat || exit 0
-                    docker rm todo-backend-uat || exit 0
-                    docker run -d -p 5001:5000 --name todo-backend-uat todo-backend:uat
+                    echo "🚀 Deploying ${APP_NAME} (UAT) on port 5001"
+                    sh '''
+                    docker stop ${APP_NAME}-uat || true
+                    docker rm ${APP_NAME}-uat || true
+                    docker run -d -p 5001:5000 --name ${APP_NAME}-uat ${APP_NAME}:uat
                     '''
                 }
             }
@@ -44,20 +61,21 @@ pipeline {
 
         stage('Approval for Production') {
             steps {
-                input "✅ UAT testing done? Deploy backend to Production?"
+                input message: "✅ UAT testing done? Deploy backend to Production?"
             }
         }
 
         stage('Build Production Docker Image') {
             steps {
                 script {
-                    echo "⚙️ Building Production backend image"
-                    bat '''
-                    echo PORT=5000 > .env
-                    echo MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true^&w=majority >> .env
-                    echo JWT_SECRET=mysecret321 >> .env
+                    echo "⚙️ Building Production Docker image for ${APP_NAME}"
+                    sh '''
+                    echo "PORT=5000" > .env
+                    echo "MONGO_URI=${MONGO_URI}" >> .env
+                    echo "JWT_SECRET=${JWT_SECRET}" >> .env
+
+                    docker build -t ${APP_NAME}:prod .
                     '''
-                    bat 'docker build -t todo-backend:prod .'
                 }
             }
         }
@@ -65,12 +83,11 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 script {
-                    echo "🚀 Deploying backend Production on port 5000"
-                    bat '''
-                    docker commit todo-backend-prod todo-backend:previous || exit 0
-                    docker stop todo-backend-prod || exit 0
-                    docker rm todo-backend-prod || exit 0
-                    docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:prod
+                    echo "🚀 Deploying ${APP_NAME} (Production) on port 5000"
+                    sh '''
+                    docker stop ${APP_NAME}-prod || true
+                    docker rm ${APP_NAME}-prod || true
+                    docker run -d -p 5000:5000 --name ${APP_NAME}-prod ${APP_NAME}:prod
                     '''
                 }
             }
@@ -84,10 +101,11 @@ pipeline {
         failure {
             echo "❌ Backend deployment failed! Rolling back..."
             script {
-                bat '''
-                docker stop todo-backend-prod || exit 0
-                docker rm todo-backend-prod || exit 0
-                docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:previous || exit 0
+                sh '''
+                docker stop ${APP_NAME}-prod || true
+                docker rm ${APP_NAME}-prod || true
+                echo "⚙️ Attempting rollback to previous working image (if any)..."
+                docker run -d -p 5000:5000 --name ${APP_NAME}-prod ${APP_NAME}:previous || true
                 '''
             }
         }
