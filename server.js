@@ -15,7 +15,7 @@ const userRoutes = require("./routes/userRoutes");
 const todoRoutes = require("./routes/todoRoutes"); // <-- add this
 
 // ✅ Mount routes
-app.use("/api/auth", userRoutes);
+app.use("/", userRoutes);
 app.use("/api/todos", todoRoutes); // <-- add this
 
 // Root route
