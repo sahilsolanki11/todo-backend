@@ -1,6 +1,12 @@
 pipeline {
     agent any
 
+    environment {
+        // Use Jenkins Credentials IDs here
+        MONGO_URI = credentials('mongo_uri')   
+        JWT_SECRET = credentials('jwt_secret')
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -20,8 +26,8 @@ pipeline {
                     echo "⚙️ Building UAT backend image"
                     sh '''
                     echo "PORT=5000" > .env
-                    echo "MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority" >> .env
-                    echo "JWT_SECRET=mysecret321" >> .env
+                    echo "MONGO_URI=${MONGO_URI}" >> .env
+                    echo "JWT_SECRET=${JWT_SECRET}" >> .env
 
                     docker build -t todo-backend:uat .
                     '''
@@ -54,8 +60,8 @@ pipeline {
                     echo "⚙️ Building Production backend image"
                     sh '''
                     echo "PORT=5000" > .env
-                    echo "MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority" >> .env
-                    echo "JWT_SECRET=mysecret321" >> .env
+                    echo "MONGO_URI=${MONGO_URI}" >> .env
+                    echo "JWT_SECRET=${JWT_SECRET}" >> .env
 
                     docker build -t todo-backend:prod .
                     '''
