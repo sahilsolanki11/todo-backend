@@ -2,9 +2,9 @@ pipeline {
     agent any
 
     environment {
-        // Use Jenkins Credentials IDs here
-        MONGO_URI = credentials('mongo_uri')   
-        JWT_SECRET = credentials('jwt_secret')
+        MONGO_URI  = credentials('mongo_uri')    // Jenkins credential ID for Mongo URL
+        JWT_SECRET = credentials('jwt_secret')   // Jenkins credential ID for JWT secret
+        PORT       = "5000"                       // Define port as a constant
     }
 
     stages {
@@ -20,17 +20,24 @@ pipeline {
             }
         }
 
+        stage('Prepare .env') {
+            steps {
+                script {
+                    // Create .env file in Jenkins workspace
+                    sh """
+                    echo "PORT=${PORT}" > .env
+                    echo "MONGO_URI=${MONGO_URI}" >> .env
+                    echo "JWT_SECRET=${JWT_SECRET}" >> .env
+                    """
+                }
+            }
+        }
+
         stage('Build UAT Docker Image') {
             steps {
                 script {
                     echo "⚙️ Building UAT backend image"
-                    sh '''
-                    echo "PORT=5000" > .env
-                    echo "MONGO_URI=${MONGO_URI}" >> .env
-                    echo "JWT_SECRET=${JWT_SECRET}" >> .env
-
-                    docker build -t todo-backend:uat .
-                    '''
+                    sh 'docker build -t todo-backend:uat .'
                 }
             }
         }
@@ -38,12 +45,16 @@ pipeline {
         stage('Deploy to UAT') {
             steps {
                 script {
-                    echo "🚀 Deploying backend UAT on port 5001"
-                    sh '''
+                    echo "🚀 Deploying backend UAT"
+                    sh """
                     docker stop todo-backend-uat || true
                     docker rm todo-backend-uat || true
-                    docker run -d -p 5001:5000 --name todo-backend-uat todo-backend:uat
-                    '''
+                    docker run -d \
+                      --name todo-backend-uat \
+                      --network todo-net \
+                      -p 5001:5000 \
+                      todo-backend:uat
+                    """
                 }
             }
         }
@@ -58,13 +69,7 @@ pipeline {
             steps {
                 script {
                     echo "⚙️ Building Production backend image"
-                    sh '''
-                    echo "PORT=5000" > .env
-                    echo "MONGO_URI=${MONGO_URI}" >> .env
-                    echo "JWT_SECRET=${JWT_SECRET}" >> .env
-
-                    docker build -t todo-backend:prod .
-                    '''
+                    sh 'docker build -t todo-backend:prod .'
                 }
             }
         }
@@ -72,12 +77,16 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 script {
-                    echo "🚀 Deploying backend Production on port 5000"
-                    sh '''
+                    echo "🚀 Deploying backend Production"
+                    sh """
                     docker stop todo-backend-prod || true
                     docker rm todo-backend-prod || true
-                    docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:prod
-                    '''
+                    docker run -d \
+                      --name todo-backend-prod \
+                      --network todo-net \
+                      -p 5000:5000 \
+                      todo-backend:prod
+                    """
                 }
             }
         }
@@ -88,14 +97,7 @@ pipeline {
             echo "✅ Backend pipeline finished successfully!"
         }
         failure {
-            echo "❌ Backend deployment failed! Rolling back..."
-            script {
-                sh '''
-                docker stop todo-backend-prod || true
-                docker rm todo-backend-prod || true
-                docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:previous || true
-                '''
-            }
+            echo "❌ Backend deployment failed."
         }
     }
 }
