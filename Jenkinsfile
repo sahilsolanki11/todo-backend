@@ -1,6 +1,12 @@
 pipeline {
     agent any
 
+    environment {
+        MONGO_URI = credentials('mongo-uri-id')
+        JWT_SECRET = credentials('jwt-secret-id')
+        PORT = credentials('port-id')
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -17,12 +23,7 @@ pipeline {
         stage('Build UAT Docker Image') {
             steps {
                 script {
-                    echo "⚙️ Building UAT backend image"
                     sh '''
-                    echo "PORT=5000" > .env
-                    echo "MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority" >> .env
-                    echo "JWT_SECRET=mysecret321" >> .env
-
                     docker build -t todo-backend:uat .
                     '''
                 }
@@ -32,11 +33,17 @@ pipeline {
         stage('Deploy to UAT') {
             steps {
                 script {
-                    echo "🚀 Deploying backend UAT on port 5001"
                     sh '''
                     docker stop todo-backend-uat || true
                     docker rm todo-backend-uat || true
-                    docker run -d -p 5001:5000 --name todo-backend-uat todo-backend:uat
+                    docker run -d \
+                      --name todo-backend-uat \
+                      --network todo-net \
+                      -e MONGO_URI="$MONGO_URI" \
+                      -e JWT_SECRET="$JWT_SECRET" \
+                      -e PORT="$PORT" \
+                      -p 5001:5000 \
+                      todo-backend:uat
                     '''
                 }
             }
@@ -51,12 +58,8 @@ pipeline {
         stage('Build Production Docker Image') {
             steps {
                 script {
-                    echo "⚙️ Building Production backend image"
                     sh '''
-                    echo "PORT=5000" > .env
-                    echo "MONGO_URI=mongodb+srv://todoUser:todoPass123@cluster0.x2r76.mongodb.net/todoApp?retryWrites=true&w=majority" >> .env
-                    echo "JWT_SECRET=mysecret321" >> .env
-
+                    docker tag todo-backend:prod todo-backend:previous || true
                     docker build -t todo-backend:prod .
                     '''
                 }
@@ -66,11 +69,17 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 script {
-                    echo "🚀 Deploying backend Production on port 5000"
                     sh '''
                     docker stop todo-backend-prod || true
                     docker rm todo-backend-prod || true
-                    docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:prod
+                    docker run -d \
+                      --name todo-backend-prod \
+                      --network todo-net \
+                      -e MONGO_URI="$MONGO_URI" \
+                      -e JWT_SECRET="$JWT_SECRET" \
+                      -e PORT="$PORT" \
+                      -p 5000:5000 \
+                      todo-backend:prod
                     '''
                 }
             }
@@ -78,16 +87,16 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ Backend pipeline finished successfully!"
-        }
         failure {
-            echo "❌ Backend deployment failed! Rolling back..."
+            echo "❌ Backend deployment failed. Rolling back..."
             script {
                 sh '''
                 docker stop todo-backend-prod || true
                 docker rm todo-backend-prod || true
-                docker run -d -p 5000:5000 --name todo-backend-prod todo-backend:previous || true
+                docker run -d \
+                  --name todo-backend-prod \
+                  --network todo-net \
+                  todo-backend:previous || true
                 '''
             }
         }
