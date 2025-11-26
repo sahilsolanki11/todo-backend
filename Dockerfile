@@ -1,18 +1,95 @@
-# Use Node.js official image
-FROM node:18
+pipeline {
+    agent any
 
-# Set working directory
-WORKDIR /app
+    environment {
+        MONGO_URI = credentials('mongo-uri-id')
+        JWT_SECRET = credentials('jwt-secret-id')
+        PORT = "5000"
+    }
 
-# Copy package.json and install dependencies
-COPY package*.json ./
-RUN npm install
+    stages {
 
-# Copy all backend code
-COPY . .
+        stage('Checkout') {
+            steps {
+                git branch: 'dev', url: 'https://github.com/sahilsolanki11/todo-backend.git'
+            }
+        }
 
-# Expose the backend port
-EXPOSE 5000
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
 
-# Start the backend
-CMD ["node", "server.js"]
+        stage('Build UAT Docker Image') {
+            steps {
+                sh 'docker build -t todo-backend:uat .'
+            }
+        }
+
+        stage('Deploy to UAT') {
+            steps {
+                sh '''
+                docker stop todo-backend-uat || true
+                docker rm todo-backend-uat || true
+                
+                docker run -d \
+                  --name todo-backend-uat \
+                  --network todo-net \
+                  -e MONGO_URI="$MONGO_URI" \
+                  -e JWT_SECRET="$JWT_SECRET" \
+                  -p 5001:5000 \
+                  todo-backend:uat
+                '''
+            }
+        }
+
+        stage('Approval for Production') {
+            steps {
+                input "✔ Proceed to PRODUCTION?"
+            }
+        }
+
+        stage('Build Production Docker Image') {
+            steps {
+                sh '''
+                docker tag todo-backend:prod todo-backend:previous || true
+                docker build -t todo-backend:prod .
+                '''
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                sh '''
+                docker stop todo-backend-prod || true
+                docker rm todo-backend-prod || true
+                
+                docker run -d \
+                  --name todo-backend-prod \
+                  --network todo-net \
+                  -e MONGO_URI="$MONGO_URI" \
+                  -e JWT_SECRET="$JWT_SECRET" \
+                  -p 5000:5000 \
+                  todo-backend:prod
+                '''
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "❌ Deployment failed. Rolling back..."
+            sh '''
+            docker stop todo-backend-prod || true
+            docker rm todo-backend-prod || true
+            
+            docker run -d \
+              --name todo-backend-prod \
+              --network todo-net \
+              -p 5000:5000 \
+              todo-backend:previous || true
+            '''
+        }
+    }
+}
