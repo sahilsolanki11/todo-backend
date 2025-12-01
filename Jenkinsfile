@@ -5,6 +5,7 @@ pipeline {
         MONGO_URI = credentials('mongo-uri-id')
         JWT_SECRET = credentials('jwt-secret-id')
         PORT = "5000"
+        DOCKER_NETWORK = "todo-net"
     }
 
     stages {
@@ -27,14 +28,15 @@ pipeline {
             }
         }
 
-        stage('Deploy to UAT') {
+        stage('Deploy UAT') {
             steps {
                 sh '''
+                docker network inspect $DOCKER_NETWORK || docker network create $DOCKER_NETWORK
                 docker stop todo-backend-uat || true
                 docker rm todo-backend-uat || true
                 docker run -d \
                   --name todo-backend-uat \
-                  --network todo-net \
+                  --network $DOCKER_NETWORK \
                   -e MONGO_URI="$MONGO_URI" \
                   -e JWT_SECRET="$JWT_SECRET" \
                   -e PORT="$PORT" \
@@ -46,7 +48,7 @@ pipeline {
 
         stage('Approval for Production') {
             steps {
-                input "Proceed to PRODUCTION?"
+                input "Proceed to PRODUCTION deployment?"
             }
         }
 
@@ -59,14 +61,14 @@ pipeline {
             }
         }
 
-        stage('Deploy to Production') {
+        stage('Deploy Production') {
             steps {
                 sh '''
                 docker stop todo-backend-prod || true
                 docker rm todo-backend-prod || true
                 docker run -d \
                   --name todo-backend-prod \
-                  --network todo-net \
+                  --network $DOCKER_NETWORK \
                   -e MONGO_URI="$MONGO_URI" \
                   -e JWT_SECRET="$JWT_SECRET" \
                   -e PORT="$PORT" \
@@ -79,13 +81,13 @@ pipeline {
 
     post {
         failure {
-            echo "❌ Deployment failed. Rolling back..."
+            echo "❌ Deployment failed. Rolling back Production..."
             sh '''
             docker stop todo-backend-prod || true
             docker rm todo-backend-prod || true
             docker run -d \
               --name todo-backend-prod \
-              --network todo-net \
+              --network $DOCKER_NETWORK \
               todo-backend:previous || true
             '''
         }
