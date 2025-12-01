@@ -10,7 +10,7 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Backend') {
             steps {
                 git branch: 'dev', url: 'https://github.com/sahilsolanki11/todo-backend.git'
             }
@@ -24,24 +24,16 @@ pipeline {
 
         stage('Build UAT Docker Image') {
             steps {
-                sh '''
-                # Use legacy Docker builder with plain progress to avoid Buildx issues
-                docker build --progress=plain -t todo-backend:uat .
-                '''
+                sh 'docker build -t todo-backend:uat .'
             }
         }
 
         stage('Deploy UAT') {
             steps {
                 sh '''
-                # Create network if it doesn't exist
                 docker network inspect $DOCKER_NETWORK || docker network create $DOCKER_NETWORK
-                
-                # Stop & remove existing UAT container if running
                 docker stop todo-backend-uat || true
                 docker rm todo-backend-uat || true
-                
-                # Run new UAT container
                 docker run -d \
                   --name todo-backend-uat \
                   --network $DOCKER_NETWORK \
@@ -62,10 +54,7 @@ pipeline {
 
         stage('Build Production Docker Image') {
             steps {
-                sh '''
-                docker tag todo-backend:prod todo-backend:previous || true
-                docker build --progress=plain -t todo-backend:prod .
-                '''
+                sh 'docker build -t todo-backend:prod .'
             }
         }
 
@@ -89,15 +78,7 @@ pipeline {
 
     post {
         failure {
-            echo "❌ Deployment failed. Rolling back Production..."
-            sh '''
-            docker stop todo-backend-prod || true
-            docker rm todo-backend-prod || true
-            docker run -d \
-              --name todo-backend-prod \
-              --network $DOCKER_NETWORK \
-              todo-backend:previous || true
-            '''
+            echo "❌ Deployment failed!"
         }
     }
 }
