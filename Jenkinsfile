@@ -2,14 +2,13 @@ pipeline {
     agent any
 
     environment {
-        MONGO_URI = credentials('mongo-uri-id')
-        JWT_SECRET = credentials('jwt-secret-id')
+        MONGO_URI = credentials('mongo-uri-id')   // Jenkins credential ID
+        JWT_SECRET = credentials('jwt-secret-id') // Jenkins credential ID
         PORT = "5000"
         DOCKER_NETWORK = "todo-net"
     }
 
     stages {
-
         stage('Checkout Backend') {
             steps {
                 git branch: 'dev', url: 'https://github.com/sahilsolanki11/todo-backend.git'
@@ -24,14 +23,16 @@ pipeline {
 
         stage('Build UAT Docker Image') {
             steps {
-                sh 'docker build -t todo-backend:uat .'
+                sh '''
+                docker network inspect $DOCKER_NETWORK || docker network create $DOCKER_NETWORK
+                docker build -t todo-backend:uat .
+                '''
             }
         }
 
         stage('Deploy UAT') {
             steps {
                 sh '''
-                docker network inspect $DOCKER_NETWORK || docker network create $DOCKER_NETWORK
                 docker stop todo-backend-uat || true
                 docker rm todo-backend-uat || true
                 docker run -d \
@@ -39,7 +40,7 @@ pipeline {
                   --network $DOCKER_NETWORK \
                   -e MONGO_URI="$MONGO_URI" \
                   -e JWT_SECRET="$JWT_SECRET" \
-                  -e PORT="$PORT" \
+                  -e PORT="5000" \
                   -p 5001:5000 \
                   todo-backend:uat
                 '''
@@ -48,13 +49,16 @@ pipeline {
 
         stage('Approval for Production') {
             steps {
-                input "Proceed to PRODUCTION deployment?"
+                input "Proceed to deploy Backend to Production?"
             }
         }
 
         stage('Build Production Docker Image') {
             steps {
-                sh 'docker build -t todo-backend:prod .'
+                sh '''
+                docker tag todo-backend:prod todo-backend:previous || true
+                docker build -t todo-backend:prod .
+                '''
             }
         }
 
@@ -68,7 +72,7 @@ pipeline {
                   --network $DOCKER_NETWORK \
                   -e MONGO_URI="$MONGO_URI" \
                   -e JWT_SECRET="$JWT_SECRET" \
-                  -e PORT="$PORT" \
+                  -e PORT="5000" \
                   -p 5000:5000 \
                   todo-backend:prod
                 '''
@@ -78,7 +82,15 @@ pipeline {
 
     post {
         failure {
-            echo "❌ Deployment failed!"
+            echo "❌ Deployment failed. Rolling back Production..."
+            sh '''
+            docker stop todo-backend-prod || true
+            docker rm todo-backend-prod || true
+            docker run -d \
+              --name todo-backend-prod \
+              --network $DOCKER_NETWORK \
+              todo-backend:previous || true
+            '''
         }
     }
 }
