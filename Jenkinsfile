@@ -2,39 +2,38 @@ pipeline {
     agent any
 
     environment {
-        MONGO_URI = credentials('mongo-uri-id')   // Jenkins credential ID
-        JWT_SECRET = credentials('jwt-secret-id') // Jenkins credential ID
-        PORT = "5000"
+        MONGO_URI = credentials('mongo-uri-id')
+        JWT_SECRET = credentials('jwt-secret-id')
         DOCKER_NETWORK = "todo-net"
     }
 
     stages {
-        stage('Checkout Backend') {
+
+        stage('Clean Workspace') {
+            steps { cleanWs() }
+        }
+
+        stage('Checkout Code') {
             steps {
                 git branch: 'dev', url: 'https://github.com/sahilsolanki11/todo-backend.git'
             }
         }
 
-        stage('Install Dependencies') {
-            steps {
-                sh 'npm install'
-            }
-        }
-
-        stage('Build UAT Docker Image') {
+        stage('Build Backend UAT Image') {
             steps {
                 sh '''
                 docker network inspect $DOCKER_NETWORK || docker network create $DOCKER_NETWORK
-                docker build -t todo-backend:uat .
+                docker build --no-cache -t todo-backend:uat .
                 '''
             }
         }
 
-        stage('Deploy UAT') {
+        stage('Deploy Backend UAT') {
             steps {
                 sh '''
                 docker stop todo-backend-uat || true
                 docker rm todo-backend-uat || true
+
                 docker run -d \
                   --name todo-backend-uat \
                   --network $DOCKER_NETWORK \
@@ -49,24 +48,25 @@ pipeline {
 
         stage('Approval for Production') {
             steps {
-                input "Proceed to deploy Backend to Production?"
+                input message: 'Proceed to Production Deployment?'
             }
         }
 
-        stage('Build Production Docker Image') {
+        stage('Build Backend Production Image') {
             steps {
                 sh '''
-                docker tag todo-backend:prod todo-backend:previous || true
-                docker build -t todo-backend:prod .
+                docker tag todo-backend:prod todo-backend:prev || true
+                docker build --no-cache -t todo-backend:prod .
                 '''
             }
         }
 
-        stage('Deploy Production') {
+        stage('Deploy Backend Production') {
             steps {
                 sh '''
                 docker stop todo-backend-prod || true
                 docker rm todo-backend-prod || true
+
                 docker run -d \
                   --name todo-backend-prod \
                   --network $DOCKER_NETWORK \
@@ -82,14 +82,11 @@ pipeline {
 
     post {
         failure {
-            echo "❌ Deployment failed. Rolling back Production..."
+            echo "❌ Failed! Rolling back backend..."
             sh '''
             docker stop todo-backend-prod || true
             docker rm todo-backend-prod || true
-            docker run -d \
-              --name todo-backend-prod \
-              --network $DOCKER_NETWORK \
-              todo-backend:previous || true
+            docker run -d --name todo-backend-prod --network $DOCKER_NETWORK -p 5000:5000 todo-backend:prev || true
             '''
         }
     }
